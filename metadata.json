@@ -1,0 +1,6 @@
+{
+  "name": "DearVault",
+  "description": "User-authenticated personal journaling and reflection studio powered by Gemini and Cloud Firestore.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
