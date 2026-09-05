@@ -118,47 +118,47 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
         {/* Value Pillars */}
         <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-left">
           <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs">
-            <div className="w-10 h-10 rounded-xl bg-amber-100/60 text-amber-800 flex items-center justify-center mb-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/60 flex items-center justify-center mb-4">
               <Shield className="w-5 h-5" />
             </div>
-            <h3 className="font-semibold text-stone-900 text-base">Strict User Data Isolation</h3>
+            <h3 className="font-semibold text-stone-900 text-base">Gemini Memory Firewall</h3>
             <p className="mt-2 text-sm text-stone-600 leading-relaxed">
-              Enforced by verified owner-bound Firestore security rules. Your reflections are cryptographically mapped to your UID. No other user can access them.
+              Strict pre-LLM authorization. Gemini detects potential memories, but zero memories enter context without your explicit ALLOW, TEMPORARY, or BLOCK approval.
             </p>
           </div>
 
           <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs">
-            <div className="w-10 h-10 rounded-xl bg-blue-100/60 text-blue-800 flex items-center justify-center mb-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 border border-blue-200/60 flex items-center justify-center mb-4">
               <Sparkles className="w-5 h-5" />
             </div>
             <h3 className="font-semibold text-stone-900 text-base">Gemini 3.6 Flash Reflexes</h3>
             <p className="mt-2 text-sm text-stone-600 leading-relaxed">
-              Multi-turn conversational reflections with automated fallback resilience. Brainstorm actions, synthesize core takeaways, or explore emotions.
+              Multi-turn conversational reflections with automated fallback resilience. Brainstorm actions, synthesize core takeaways, or explore deep emotional inquiry.
             </p>
           </div>
 
           <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100/60 text-emerald-800 flex items-center justify-center mb-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/60 flex items-center justify-center mb-4">
               <BookOpen className="w-5 h-5" />
             </div>
-            <h3 className="font-semibold text-stone-900 text-base">Persistent Interaction History</h3>
+            <h3 className="font-semibold text-stone-900 text-base">Owner-Bound Firestore Isolation</h3>
             <p className="mt-2 text-sm text-stone-600 leading-relaxed">
-              Every prompt, response, and journal iteration is automatically saved with zero-crash undefined sanitization, ready whenever you return.
+              Enforced by verified owner-bound Firestore security rules. Your reflections are cryptographically mapped to your authenticated UID and never leaked.
             </p>
           </div>
         </div>
 
         {/* Security Trust Badges */}
         <div className="mt-14 flex flex-wrap items-center justify-center gap-6 text-xs text-stone-600">
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             OAuth 2.0 Federated Identity
           </span>
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            Zero Stored Passwords
+            Pre-LLM Physical Pruning
           </span>
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             Server-Side Gemini API Proxy
           </span>

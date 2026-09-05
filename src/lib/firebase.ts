@@ -21,7 +21,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
-import { JournalEntry, InteractionMessage } from "../types";
+import { JournalEntry, InteractionMessage, StoredMemory } from "../types";
 
 // Initialize Firebase App
 const app: FirebaseApp = !getApps().length
@@ -151,6 +151,68 @@ export function subscribeToUserEntries(
     },
     (err) => {
       console.error("Firestore entries subscription error:", err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+// Memory Firewall: Firestore paths strictly scoped to /users/{userId}/memories/{memoryId}
+export function getUserMemoriesRef(userId: string) {
+  return collection(db, "users", userId, "memories");
+}
+
+export function getUserMemoryDocRef(userId: string, memoryId: string) {
+  return doc(db, "users", userId, "memories", memoryId);
+}
+
+export async function saveUserMemory(
+  userId: string,
+  memory: Partial<StoredMemory> & { id: string }
+): Promise<void> {
+  if (!userId) throw new Error("Authenticated user ID is required to manage memories.");
+  const docRef = getUserMemoryDocRef(userId, memory.id);
+  const sanitized = sanitizePayload({
+    ...memory,
+    userId,
+    updatedAt: Date.now(),
+  });
+  await setDoc(docRef, sanitized, { merge: true });
+}
+
+export async function deleteUserMemory(userId: string, memoryId: string): Promise<void> {
+  if (!userId) throw new Error("Authenticated user ID is required to delete memory.");
+  const docRef = getUserMemoryDocRef(userId, memoryId);
+  await deleteDoc(docRef);
+}
+
+export function subscribeToUserMemories(
+  userId: string,
+  callback: (memories: StoredMemory[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  if (!userId) {
+    callback([]);
+    return () => {};
+  }
+
+  const memoriesRef = getUserMemoriesRef(userId);
+  const q = query(memoriesRef, orderBy("updatedAt", "desc"));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: StoredMemory[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data() as StoredMemory;
+        items.push({
+          ...data,
+          id: doc.id,
+        });
+      });
+      callback(items);
+    },
+    (err) => {
+      console.error("Firestore memories subscription error:", err);
       if (onError) onError(err);
     }
   );

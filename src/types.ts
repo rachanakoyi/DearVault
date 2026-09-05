@@ -1,5 +1,30 @@
 export type ReflectionMode = 'reflect' | 'summary' | 'brainstorm' | 'chat';
 
+export type MemoryPolicy = 'ALLOWED' | 'TEMPORARY' | 'BLOCKED' | 'REVOKED';
+
+export interface InfluencedByItem {
+  memoryId: string;
+  category: string;
+  summary: string;
+}
+
+export interface StoredMemory {
+  id: string;
+  userId: string;
+  summary: string;
+  category: string;
+  policy: MemoryPolicy;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt?: number | null;
+  sourceEntryId?: string;
+}
+
+export interface MemorySuggestion {
+  summary: string;
+  category: string;
+}
+
 export interface InteractionMessage {
   id: string;
   role: 'user' | 'model';
@@ -7,6 +32,8 @@ export interface InteractionMessage {
   timestamp: number;
   mode?: ReflectionMode;
   modelUsed?: string;
+  influencedBy?: InfluencedByItem[];
+  redactionApplied?: boolean;
 }
 
 export interface JournalEntry {
