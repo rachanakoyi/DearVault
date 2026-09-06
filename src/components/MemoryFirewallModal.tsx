@@ -52,6 +52,10 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
   const [selectedDurationMs, setSelectedDurationMs] = useState<number>(24 * 60 * 60 * 1000);
   const [customExpiresDate, setCustomExpiresDate] = useState<string>("");
 
+  // In-modal confirmation states to guarantee 100% iframe compatibility without window.confirm
+  const [memoryToDelete, setMemoryToDelete] = useState<string | null>(null);
+  const [reallowConfirmTarget, setReallowConfirmTarget] = useState<StoredMemory | null>(null);
+
   // State for manual memory addition
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSummary, setNewSummary] = useState("");
@@ -79,21 +83,13 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
     return `Active for ${hours}h ${minutes}m (until ${new Date(expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
   };
 
-  // Change policy handler
-  const handleUpdatePolicy = async (
+  // Perform policy update
+  const executePolicyUpdate = async (
     memory: StoredMemory,
     targetPolicy: MemoryPolicy,
     customExpiresAt?: number | null
   ) => {
     if (!userId) return;
-
-    // Safety guard: Never silently restore REVOKED back to ALLOWED
-    if (memory.policy === "REVOKED" && targetPolicy === "ALLOWED") {
-      const confirmed = window.confirm(
-        "This memory was previously REVOKED. Revocation is permanent by design. Are you sure you want to explicitly permit this personal insight again?"
-      );
-      if (!confirmed) return;
-    }
 
     setIsProcessingId(memory.id);
     setActionError(null);
@@ -113,6 +109,7 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
         updatedAt: Date.now(),
       });
       setEditingTempMemoryId(null);
+      setReallowConfirmTarget(null);
     } catch (err: any) {
       console.error("Failed to update memory policy:", err);
       setActionError(`Failed to update memory policy: ${err?.message || "Firestore error"}`);
@@ -121,17 +118,29 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
     }
   };
 
+  // Change policy handler with explicit guard against silent re-activation of REVOKED memories
+  const handleUpdatePolicy = (
+    memory: StoredMemory,
+    targetPolicy: MemoryPolicy,
+    customExpiresAt?: number | null
+  ) => {
+    if (memory.policy === "REVOKED" && targetPolicy === "ALLOWED") {
+      setReallowConfirmTarget(memory);
+      return;
+    }
+    executePolicyUpdate(memory, targetPolicy, customExpiresAt);
+  };
+
   // Delete memory handler
-  const handleDelete = async (memoryId: string) => {
+  const confirmDeleteMemory = async (memoryId: string) => {
     if (!userId) return;
-    const confirmed = window.confirm("Are you sure you want to delete this memory record from your vault?");
-    if (!confirmed) return;
 
     setIsProcessingId(memoryId);
     setActionError(null);
 
     try {
       await deleteUserMemory(userId, memoryId);
+      setMemoryToDelete(null);
     } catch (err: any) {
       console.error("Failed to delete memory:", err);
       setActionError(`Failed to delete memory: ${err?.message || "Firestore error"}`);
@@ -182,10 +191,9 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
     if (filterPolicy !== "ALL" && m.policy !== filterPolicy) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      return (
-        m.summary.toLowerCase().includes(q) ||
-        m.category.toLowerCase().includes(q)
-      );
+      const summaryText = typeof m.summary === "string" ? m.summary.toLowerCase() : "";
+      const categoryText = typeof m.category === "string" ? m.category.toLowerCase() : "";
+      return summaryText.includes(q) || categoryText.includes(q);
     }
     return true;
   });
@@ -271,6 +279,64 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
             >
               Dismiss
             </button>
+          </div>
+        )}
+
+        {/* In-Modal Delete Confirmation Prompt */}
+        {memoryToDelete && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3 rounded-xl bg-amber-50/90 border border-amber-300 text-stone-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>
+                Permanently purge this memory record from your vault? This cannot be undone.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setMemoryToDelete(null)}
+                className="px-2.5 py-1 text-xs font-medium text-stone-600 bg-white border border-stone-200 rounded-lg hover:bg-stone-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingId === memoryToDelete}
+                onClick={() => confirmDeleteMemory(memoryToDelete)}
+                className="px-2.5 py-1 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isProcessingId === memoryToDelete ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* In-Modal Re-allow Revoked Confirmation Prompt */}
+        {reallowConfirmTarget && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3 rounded-xl bg-stone-900 text-stone-100 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                This memory was previously <strong>REVOKED</strong>. Revocation is permanent by design. Are you sure you want to explicitly re-authorize this personal insight into Gemini context?
+              </span>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setReallowConfirmTarget(null)}
+                className="px-2.5 py-1 text-xs font-medium text-stone-300 bg-stone-800 border border-stone-700 rounded-lg hover:bg-stone-700 cursor-pointer"
+              >
+                Keep Revoked
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingId === reallowConfirmTarget.id}
+                onClick={() => executePolicyUpdate(reallowConfirmTarget, "ALLOWED")}
+                className="px-2.5 py-1 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isProcessingId === reallowConfirmTarget.id ? "Authorizing..." : "Explicitly Allow"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -603,7 +669,7 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
                         <span className="italic text-[11px]">Excluded</span>
                         <button
                           disabled={isProcessing}
-                          onClick={() => handleDelete(mem.id)}
+                          onClick={() => setMemoryToDelete(mem.id)}
                           className="p-1 text-stone-400 hover:text-red-600 rounded transition-colors cursor-pointer"
                           title="Purge record permanently from Firestore"
                         >
@@ -616,7 +682,7 @@ export const MemoryFirewallModal: React.FC<MemoryFirewallModalProps> = ({
                     {mem.policy !== "REVOKED" && (
                       <button
                         disabled={isProcessing}
-                        onClick={() => handleDelete(mem.id)}
+                        onClick={() => setMemoryToDelete(mem.id)}
                         className="p-1 text-stone-400 hover:text-red-600 rounded transition-colors cursor-pointer ml-auto"
                         title="Delete from Firestore"
                       >

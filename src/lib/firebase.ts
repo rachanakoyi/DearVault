@@ -18,6 +18,9 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
+  getDocs,
+  writeBatch,
   serverTimestamp,
 } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -115,11 +118,98 @@ export async function saveJournalEntry(
   }
 }
 
+// Delete Journal Entry and its associated memories safely
+export interface DeleteJournalEntryResult {
+  entryDeleted: boolean;
+  deletedMemoriesCount: number;
+  memoryError?: string | null;
+}
+
+/**
+ * Deletes all memories associated with a specific journal entry for the authenticated user.
+ * Strictly scoped to /users/{userId}/memories where sourceEntryId == entryId.
+ * Never touches memories belonging to other entries or other users.
+ */
+export async function deleteUserMemoriesByEntryId(
+  userId: string,
+  entryId: string
+): Promise<{ deletedCount: number }> {
+  if (!userId || typeof userId !== "string" || userId.trim() === "") {
+    throw new Error("Authenticated user ID is required to clean up memories.");
+  }
+  if (!entryId || typeof entryId !== "string" || entryId.trim() === "") {
+    throw new Error("Journal entry ID is required to clean up memories.");
+  }
+
+  const memoriesRef = getUserMemoriesRef(userId);
+  const q = query(memoriesRef, where("sourceEntryId", "==", entryId));
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) {
+    return { deletedCount: 0 };
+  }
+
+  let deletedCount = 0;
+  // Safety filter: ensure document belongs strictly to this user and sourceEntryId matches
+  const targetDocs = snapshot.docs.filter((docSnap) => {
+    const data = docSnap.data();
+    return data && data.sourceEntryId === entryId && (!data.userId || data.userId === userId);
+  });
+
+  const chunkSize = 400;
+  for (let i = 0; i < targetDocs.length; i += chunkSize) {
+    const chunk = targetDocs.slice(i, i + chunkSize);
+    const batch = writeBatch(db);
+    for (const docSnap of chunk) {
+      batch.delete(docSnap.ref);
+      deletedCount++;
+    }
+    await batch.commit();
+  }
+
+  return { deletedCount };
+}
+
 // Delete Journal Entry
-export async function deleteJournalEntry(userId: string, entryId: string): Promise<void> {
-  if (!userId) throw new Error("Authenticated user ID is required to delete entry.");
+export async function deleteJournalEntry(
+  userId: string,
+  entryId: string
+): Promise<DeleteJournalEntryResult> {
+  if (!userId || typeof userId !== "string" || userId.trim() === "") {
+    throw new Error("Authenticated user ID is required to delete entry.");
+  }
+  if (!entryId || typeof entryId !== "string" || entryId.trim() === "") {
+    throw new Error("Journal entry ID is required to delete entry.");
+  }
+
+  // 1. Delete Journal Entry document first
   const docRef = getUserEntryDocRef(userId, entryId);
   await deleteDoc(docRef);
+
+  // 2. Safely clean up memories associated with this entry
+  let deletedMemoriesCount = 0;
+  let memoryError: string | null = null;
+  try {
+    const cleanupResult = await deleteUserMemoriesByEntryId(userId, entryId);
+    deletedMemoriesCount = cleanupResult.deletedCount;
+    if (deletedMemoriesCount > 0) {
+      console.log(
+        `[Memory Cleanup] Successfully deleted ${deletedMemoriesCount} memories associated with entry "${entryId}" for user "${userId}".`
+      );
+    }
+  } catch (memErr: any) {
+    memoryError = memErr?.message || String(memErr);
+    console.error(
+      `[Memory Cleanup Failure] Journal entry "${entryId}" was deleted, but failed to delete associated memories:`,
+      memErr
+    );
+  }
+
+  return {
+    entryDeleted: true,
+    deletedMemoriesCount,
+    memoryError,
+  };
 }
 
 // Real-time subscription to user's journal entries

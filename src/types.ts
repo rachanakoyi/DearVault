@@ -43,6 +43,7 @@ export interface JournalEntry {
   content: string;
   mood?: string;
   tags?: string[];
+  isFavorite?: boolean;
   summary?: string;
   createdAt: number;
   updatedAt: number;

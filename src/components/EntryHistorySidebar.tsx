@@ -8,8 +8,9 @@ import {
   Calendar,
   MessageSquare,
   Sparkles,
-  ChevronRight,
   Filter,
+  Star,
+  Tag,
 } from "lucide-react";
 
 interface EntryHistorySidebarProps {
@@ -18,9 +19,64 @@ interface EntryHistorySidebarProps {
   onSelectEntry: (entry: JournalEntry) => void;
   onNewEntry: () => void;
   onDeleteEntry: (entryId: string) => void;
+  onToggleFavorite?: (entryId: string, e?: React.MouseEvent) => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
 }
+
+/**
+ * Normalizes all Unicode dash variants (em-dash, en-dash, minus, etc.) to standard ASCII hyphen '-'
+ */
+const normalizeDashes = (str: string): string =>
+  str.replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
+
+/**
+ * Normalizes punctuation characters (?, !, ., ,, :, ;, -, —, quotes, etc.) into spaces
+ * and collapses multiple spaces, enabling punctuation-tolerant search comparison.
+ */
+const cleanPunctuation = (str: string): string =>
+  normalizeDashes(str)
+    .replace(/[?!.,:;\-_/\\()[\]{}'"`~@#$%^&*+=|<>]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Safely compares a target string against a query with punctuation and dash tolerance:
+ * 1. Direct case-insensitive substring
+ * 2. Dash-normalized substring (em-dash '—', en-dash '–', minus '−' to '-')
+ * 3. Punctuation-normalized substring (punctuation treated as boundaries/whitespace)
+ * 4. Token-based matching (all query words present in target)
+ */
+const matchesSearchText = (target: unknown, query: string): boolean => {
+  if (!query) return true;
+  if (typeof target !== "string" || !target.trim()) return false;
+
+  const rawTarget = target.toLowerCase();
+  const rawQuery = query.toLowerCase();
+
+  // 1. Direct standard substring match
+  if (rawTarget.includes(rawQuery)) return true;
+
+  // 2. Dash-normalized match (maps em-dash, en-dash, etc. to standard '-')
+  const dashTarget = normalizeDashes(rawTarget);
+  const dashQuery = normalizeDashes(rawQuery);
+  if (dashTarget.includes(dashQuery)) return true;
+
+  // 3. Punctuation-normalized match
+  const cleanTarget = cleanPunctuation(rawTarget);
+  const cleanQuery = cleanPunctuation(rawQuery);
+  if (cleanQuery && cleanTarget.includes(cleanQuery)) return true;
+
+  // 4. Token-based match: if query has multiple terms, ensure all terms appear in target
+  if (cleanQuery) {
+    const tokens = cleanQuery.split(" ").filter(Boolean);
+    if (tokens.length > 1 && tokens.every((token) => cleanTarget.includes(token))) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
   entries,
@@ -28,11 +84,13 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
   onSelectEntry,
   onNewEntry,
   onDeleteEntry,
+  onToggleFavorite,
   isOpenMobile,
   onCloseMobile,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMood, setSelectedMood] = useState<string>("all");
+  const [filterFavoriteOnly, setFilterFavoriteOnly] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
 
   const availableMoods = useMemo(() => {
@@ -44,19 +102,23 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
   }, [entries]);
 
   const filteredEntries = useMemo(() => {
+    const query = searchQuery.trim();
     return entries.filter((entry) => {
       const matchesSearch =
-        searchQuery.trim() === "" ||
-        entry.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (entry.summary && entry.summary.toLowerCase().includes(searchQuery.toLowerCase()));
+        query === "" ||
+        matchesSearchText(entry.title, query) ||
+        matchesSearchText(entry.content, query) ||
+        matchesSearchText(entry.summary, query) ||
+        (Array.isArray(entry.tags) &&
+          entry.tags.some((t) => typeof t === "string" && matchesSearchText(t, query)));
 
       const matchesMood = selectedMood === "all" || entry.mood === selectedMood;
-      return matchesSearch && matchesMood;
+      const matchesFavorite = !filterFavoriteOnly || Boolean(entry.isFavorite);
+      return matchesSearch && matchesMood && matchesFavorite;
     });
-  }, [entries, searchQuery, selectedMood]);
+  }, [entries, searchQuery, selectedMood, filterFavoriteOnly]);
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp?: number) => {
     if (!timestamp) return "Just now";
     const date = new Date(timestamp);
     const now = new Date();
@@ -106,42 +168,59 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
             <input
               id="search-entries-input"
               type="text"
-              placeholder="Search reflections & entries..."
+              placeholder="Search reflections, tags & entries..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-white rounded-lg border border-stone-200 focus:outline-none focus:border-stone-400 text-stone-800 placeholder:text-stone-400 transition-colors"
             />
           </div>
 
-          {/* Mood filter if multiple exist */}
-          {availableMoods.length > 0 && (
-            <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-              <Filter className="w-3 h-3 text-stone-400 shrink-0" />
+          {/* Mood & Favorite Filters */}
+          <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <Filter className="w-3 h-3 text-stone-400 shrink-0" />
+            <button
+              onClick={() => {
+                setSelectedMood("all");
+                setFilterFavoriteOnly(false);
+              }}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+                selectedMood === "all" && !filterFavoriteOnly
+                  ? "bg-stone-900 text-stone-50"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              }`}
+            >
+              All
+            </button>
+
+            {/* Favorite Filter Button */}
+            <button
+              id="filter-favorites-btn"
+              onClick={() => setFilterFavoriteOnly((prev) => !prev)}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-medium inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                filterFavoriteOnly
+                  ? "bg-amber-400 text-stone-950 font-bold shadow-2xs"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              }`}
+              title="Filter by favorited entries"
+            >
+              <Star className={`w-2.5 h-2.5 ${filterFavoriteOnly ? "fill-stone-950 text-stone-950" : "fill-amber-400 text-amber-500"}`} />
+              <span>Favorites</span>
+            </button>
+
+            {availableMoods.map((m) => (
               <button
-                onClick={() => setSelectedMood("all")}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                  selectedMood === "all"
-                    ? "bg-stone-900 text-stone-50"
+                key={m}
+                onClick={() => setSelectedMood(m)}
+                className={`px-2 py-0.5 rounded-md text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
+                  selectedMood === m && !filterFavoriteOnly
+                    ? "bg-stone-900 text-stone-50 font-medium"
                     : "bg-stone-100 text-stone-600 hover:bg-stone-200"
                 }`}
               >
-                All
+                {m}
               </button>
-              {availableMoods.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setSelectedMood(m)}
-                  className={`px-2 py-0.5 rounded-md text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
-                    selectedMood === m
-                      ? "bg-stone-900 text-stone-50 font-medium"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
         {/* Entries Count Header */}
@@ -159,8 +238,8 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
               <BookOpen className="w-8 h-8 mx-auto text-stone-400 mb-2 stroke-1" />
               <p className="font-medium text-stone-700">No journal entries found.</p>
               <p className="text-stone-600 mt-1">
-                {searchQuery
-                  ? "Try adjusting your search terms."
+                {searchQuery || filterFavoriteOnly || selectedMood !== "all"
+                  ? "Try adjusting your filter or search terms."
                   : "Click 'New Journal Entry' to write your first reflection."}
               </p>
             </div>
@@ -168,6 +247,8 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
             filteredEntries.map((entry) => {
               const isActive = entry.id === activeEntryId;
               const interactionCount = entry.messages?.length || 0;
+              const contentText = typeof entry.content === "string" ? entry.content.trim() : "";
+              const wordCount = contentText ? contentText.split(/\s+/).filter(Boolean).length : 0;
 
               return (
                 <div
@@ -184,13 +265,31 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
                   }`}
                 >
                   <div className="flex items-start justify-between gap-1.5 pl-1">
-                    <h4
-                      className={`text-xs font-semibold truncate flex-1 ${
-                        isActive ? "text-stone-900" : "text-stone-800 group-hover:text-stone-900"
-                      }`}
-                    >
-                      {entry.title || "Untitled Reflection"}
-                    </h4>
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {/* Favorite star toggle button */}
+                      {onToggleFavorite && (
+                        <button
+                          type="button"
+                          title={entry.isFavorite ? "Remove favorite" : "Mark as favorite"}
+                          onClick={(e) => onToggleFavorite(entry.id, e)}
+                          className={`shrink-0 p-0.5 rounded hover:bg-stone-100 transition-colors cursor-pointer ${
+                            entry.isFavorite
+                              ? "text-amber-500 opacity-100"
+                              : "text-stone-300 hover:text-amber-500 opacity-0 group-hover:opacity-100"
+                          }`}
+                        >
+                          <Star className={`w-3.5 h-3.5 ${entry.isFavorite ? "fill-amber-400 text-amber-500" : ""}`} />
+                        </button>
+                      )}
+                      <h4
+                        className={`text-xs font-semibold truncate ${
+                          isActive ? "text-stone-900" : "text-stone-800 group-hover:text-stone-900"
+                        }`}
+                      >
+                        {entry.title || "Untitled Reflection"}
+                      </h4>
+                    </div>
+
                     <span className="text-[10px] text-stone-400 shrink-0 flex items-center gap-0.5">
                       <Calendar className="w-2.5 h-2.5" />
                       {formatDate(entry.updatedAt || entry.createdAt)}
@@ -201,12 +300,32 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
                     {entry.content || "(Empty reflection draft)"}
                   </p>
 
-                  <div className="mt-2 flex items-center justify-between text-[10px] pl-1">
-                    <div className="flex items-center gap-1.5">
+                  <div className="mt-2 flex items-center justify-between text-[10px] pl-1 gap-1">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                       {entry.mood && (
                         <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-900 font-medium border border-amber-200/60 text-[10px]">
                           {entry.mood}
                         </span>
+                      )}
+                      <span className="text-stone-400 text-[10px]" title="Word Count">
+                        {wordCount}w
+                      </span>
+                      {Array.isArray(entry.tags) && entry.tags.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          {entry.tags.slice(0, 2).map((t) => (
+                            <span
+                              key={t}
+                              className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 text-[10px]"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                          {entry.tags.length > 2 && (
+                            <span className="text-[10px] text-stone-400 font-medium">
+                              +{entry.tags.length - 2}
+                            </span>
+                          )}
+                        </div>
                       )}
                       {interactionCount > 0 && (
                         <span className="inline-flex items-center gap-0.5 text-stone-600">
@@ -229,7 +348,7 @@ export const EntryHistorySidebar: React.FC<EntryHistorySidebarProps> = ({
                         e.stopPropagation();
                         setEntryToDelete(entry.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 hover:text-red-600 p-1 rounded hover:bg-red-50 text-stone-400 transition-all cursor-pointer"
+                      className="opacity-0 group-hover:opacity-100 hover:text-red-600 p-1 rounded hover:bg-red-50 text-stone-400 transition-all cursor-pointer shrink-0"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

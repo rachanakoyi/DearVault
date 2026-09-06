@@ -6,10 +6,12 @@ import {
   Check,
   AlertCircle,
   Clock,
+  Calendar,
   Lightbulb,
   FileText,
   HeartHandshake,
   Tag,
+  Star,
 } from "lucide-react";
 import { MemoryScannerCard } from "./MemoryScannerCard";
 
@@ -25,14 +27,43 @@ interface JournalEditorProps {
   onMemorySaved?: () => void;
 }
 
-const MOOD_OPTIONS = [
-  { label: "Reflective", emoji: "🧘" },
+export const MOOD_OPTIONS = [
+  { label: "Happy", emoji: "😊" },
+  { label: "Calm", emoji: "🌿" },
+  { label: "Excited", emoji: "🎉" },
   { label: "Grateful", emoji: "☀️" },
-  { label: "Inspired", emoji: "💡" },
-  { label: "Overwhelmed", emoji: "🌊" },
-  { label: "Focused", emoji: "🎯" },
-  { label: "Seeking Clarity", emoji: "🌿" },
+  { label: "Neutral", emoji: "⚪" },
+  { label: "Anxious", emoji: "🌪️" },
+  { label: "Stressed", emoji: "⚡" },
+  { label: "Tired", emoji: "🌙" },
+  { label: "Sad", emoji: "🌧️" },
+  { label: "Angry", emoji: "🔥" },
 ];
+
+export const calculateWordCount = (text?: string | null): number => {
+  if (!text || typeof text !== "string") return 0;
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).filter(Boolean).length;
+};
+
+export const formatFullDateTime = (timestamp?: number | null): string => {
+  if (!timestamp || typeof timestamp !== "number" || isNaN(timestamp)) {
+    return "Unknown";
+  }
+  try {
+    return new Date(timestamp).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "Unknown";
+  }
+};
 
 export const JournalEditor: React.FC<JournalEditorProps> = ({
   entry,
@@ -45,26 +76,33 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   userId,
   onMemorySaved,
 }) => {
-  const [title, setTitle] = useState(entry.title);
-  const [content, setContent] = useState(entry.content);
+  const [title, setTitle] = useState(entry.title || "");
+  const [content, setContent] = useState(entry.content || "");
   const [mood, setMood] = useState(entry.mood || "");
+  const [isFavorite, setIsFavorite] = useState(Boolean(entry.isFavorite));
   const [tagInput, setTagInput] = useState("");
-  const [tags, setTags] = useState<string[]>(entry.tags || []);
+  const [tags, setTags] = useState<string[]>(Array.isArray(entry.tags) ? entry.tags : []);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Debounced auto-save notification to parent
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSynchronizedEntryIdRef = useRef(entry.id);
 
-  // Sync state strictly when the active entry ID changes
+  // Sync state when the active entry ID changes, or when props update while no unsaved changes are pending
   useEffect(() => {
     if (lastSynchronizedEntryIdRef.current !== entry.id) {
       lastSynchronizedEntryIdRef.current = entry.id;
-      setTitle(entry.title);
-      setContent(entry.content);
+      setTitle(entry.title || "");
+      setContent(entry.content || "");
       setMood(entry.mood || "");
-      setTags(entry.tags || []);
+      setIsFavorite(Boolean(entry.isFavorite));
+      setTags(Array.isArray(entry.tags) ? entry.tags : []);
       setHasUnsavedChanges(false);
+    } else if (!hasUnsavedChanges) {
+      // Sync external prop updates (such as sidebar favorite toggle) safely when user is not typing
+      setIsFavorite(Boolean(entry.isFavorite));
+      setMood(entry.mood || "");
+      setTags(Array.isArray(entry.tags) ? entry.tags : []);
     }
 
     return () => {
@@ -73,7 +111,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         timeoutRef.current = null;
       }
     };
-  }, [entry.id, entry.title, entry.content, entry.mood, entry.tags]);
+  }, [entry.id, entry.title, entry.content, entry.mood, entry.tags, entry.isFavorite, hasUnsavedChanges]);
 
   // Clean up pending auto-save timer on unmount
   useEffect(() => {
@@ -88,41 +126,47 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
     setHasUnsavedChanges(true);
-    triggerAutoSave({ title: newTitle, content, mood, tags });
+    triggerAutoSave({ title: newTitle, content, mood, tags, isFavorite });
   };
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
     setHasUnsavedChanges(true);
-    triggerAutoSave({ title, content: newContent, mood, tags });
+    triggerAutoSave({ title, content: newContent, mood, tags, isFavorite });
   };
 
   const handleMoodSelect = (selectedMood: string) => {
     const updated = mood === selectedMood ? "" : selectedMood;
     setMood(updated);
     setHasUnsavedChanges(true);
-    triggerAutoSave({ title, content, mood: updated, tags });
+    triggerAutoSave({ title, content, mood: updated, tags, isFavorite });
   };
 
-  const handleAddTag = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && tagInput.trim()) {
-      e.preventDefault();
-      const cleanTag = tagInput.trim().replace(/^#/, "");
-      if (!tags.includes(cleanTag)) {
-        const newTags = [...tags, cleanTag];
-        setTags(newTags);
-        setHasUnsavedChanges(true);
-        triggerAutoSave({ title, content, mood, tags: newTags });
-      }
-      setTagInput("");
+  const handleToggleFavorite = () => {
+    const nextFavorite = !isFavorite;
+    setIsFavorite(nextFavorite);
+    setHasUnsavedChanges(true);
+    triggerAutoSave({ title, content, mood, tags, isFavorite: nextFavorite });
+  };
+
+  const handleAddTag = (rawText: string) => {
+    const cleanTag = rawText.trim().replace(/^#+/, "").replace(/\s+/g, " ");
+    if (!cleanTag) return;
+    const isDuplicate = tags.some((t) => t.toLowerCase() === cleanTag.toLowerCase());
+    if (!isDuplicate) {
+      const newTags = [...tags, cleanTag];
+      setTags(newTags);
+      setHasUnsavedChanges(true);
+      triggerAutoSave({ title, content, mood, tags: newTags, isFavorite });
     }
+    setTagInput("");
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
     const newTags = tags.filter((t) => t !== tagToRemove);
     setTags(newTags);
     setHasUnsavedChanges(true);
-    triggerAutoSave({ title, content, mood, tags: newTags });
+    triggerAutoSave({ title, content, mood, tags: newTags, isFavorite });
   };
 
   const triggerAutoSave = (data: Partial<JournalEntry>) => {
@@ -143,30 +187,54 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    onUpdateEntry(entry.id, { title, content, mood, tags });
+    onUpdateEntry(entry.id, { title, content, mood, tags, isFavorite });
     setHasUnsavedChanges(false);
   };
 
-  const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
+  const wordCount = calculateWordCount(content);
   const charCount = content.length;
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl border border-stone-200/80 shadow-xs overflow-hidden">
       {/* Top Sub-Header & Status */}
       <div className="p-3.5 sm:px-6 border-b border-stone-200/60 flex flex-wrap items-center justify-between gap-3 bg-[#fcfcfb]">
-        <div className="flex items-center gap-2 text-xs text-stone-500">
-          <Clock className="w-3.5 h-3.5 text-stone-400" />
-          <span>
-            {new Date(entry.createdAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-          <span>•</span>
-          <span>{wordCount} words</span>
-          <span>•</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
+          <div className="flex items-center gap-1.5" title="Creation Date & Time">
+            <Calendar className="w-3.5 h-3.5 text-stone-400" />
+            <span className="font-medium text-stone-700">Created:</span>
+            <span>{formatFullDateTime(entry.createdAt)}</span>
+          </div>
+          {entry.updatedAt && (
+            <div className="flex items-center gap-1.5 text-stone-400" title="Last Updated Date & Time">
+              <Clock className="w-3.5 h-3.5 text-stone-400" />
+              <span className="font-medium text-stone-700">Updated:</span>
+              <span>{formatFullDateTime(entry.updatedAt)}</span>
+            </div>
+          )}
+          <span className="text-stone-300">•</span>
+          <span className="font-semibold text-stone-700">{wordCount} {wordCount === 1 ? "word" : "words"}</span>
+          <span className="text-stone-300">•</span>
           <span>{charCount} chars</span>
         </div>
 
         {/* Save Status & Action */}
         <div className="flex items-center gap-2">
+          {/* Favorite Toggle Button */}
+          <button
+            id="toggle-favorite-btn"
+            type="button"
+            onClick={handleToggleFavorite}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              isFavorite
+                ? "bg-amber-100 text-amber-900 border border-amber-300 font-semibold shadow-2xs"
+                : "bg-stone-100 hover:bg-stone-200 text-stone-600 border border-stone-200/80"
+            }`}
+            title={isFavorite ? "Remove from favorites" : "Mark as favorite"}
+          >
+            <Star className={`w-3.5 h-3.5 ${isFavorite ? "fill-amber-500 text-amber-600" : "text-stone-400"}`} />
+            <span>{isFavorite ? "Favorited" : "Favorite"}</span>
+          </button>
+
           {saveError ? (
             <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 px-2.5 py-1 rounded-md border border-red-200">
               <AlertCircle className="w-3.5 h-3.5" />
@@ -234,12 +302,23 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     ? "bg-amber-100/90 text-amber-950 border border-amber-300/80 font-semibold shadow-2xs"
                     : "bg-stone-50 text-stone-600 border border-stone-200/80 hover:bg-stone-100"
                 }`}
+                title={isSelected ? `Click to clear ${m.label}` : `Set mood to ${m.label}`}
               >
                 <span>{m.emoji}</span>
                 <span>{m.label}</span>
               </button>
             );
           })}
+          {mood && (
+            <button
+              type="button"
+              onClick={() => handleMoodSelect(mood)}
+              className="text-[11px] text-stone-400 hover:text-stone-700 underline px-1 cursor-pointer"
+              title="Clear mood"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Content Textarea */}
@@ -265,19 +344,37 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 type="button"
                 onClick={() => handleRemoveTag(t)}
                 className="hover:text-red-600 font-bold ml-0.5 cursor-pointer"
+                title={`Remove #${t}`}
               >
                 ×
               </button>
             </span>
           ))}
-          <input
-            type="text"
-            placeholder="Add tag (Press Enter)..."
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleAddTag}
-            className="px-2 py-0.5 text-xs bg-transparent border-b border-stone-200 focus:outline-none focus:border-stone-500 text-stone-700 w-36 placeholder:text-stone-400"
-          />
+          <div className="inline-flex items-center gap-1">
+            <input
+              id="journal-tag-input"
+              type="text"
+              placeholder="Add tag (Press Enter)..."
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddTag(tagInput);
+                }
+              }}
+              className="px-2 py-0.5 text-xs bg-transparent border-b border-stone-200 focus:outline-none focus:border-stone-500 text-stone-700 w-36 placeholder:text-stone-400"
+            />
+            {tagInput.trim() && (
+              <button
+                type="button"
+                onClick={() => handleAddTag(tagInput)}
+                className="px-1.5 py-0.5 rounded bg-stone-200/80 hover:bg-stone-300 text-stone-700 text-[11px] font-medium cursor-pointer"
+              >
+                Add
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Memory Scanner Card */}

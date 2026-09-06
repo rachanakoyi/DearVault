@@ -64,7 +64,7 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
       <main className="flex-1 max-w-5xl mx-auto px-6 py-16 sm:py-24 flex flex-col items-center text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium mb-8">
           <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-          Powered by Gemini 3.6 Flash & Isolated Cloud Firestore
+          Powered by Gemini 3.6 Flash & Owner-Bound Cloud Firestore
         </div>
 
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif tracking-tight text-stone-900 max-w-3xl leading-[1.15]">
@@ -115,36 +115,84 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
           </button>
         </div>
 
-        {/* Value Pillars */}
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-left">
-          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/60 flex items-center justify-center mb-4">
-              <Shield className="w-5 h-5" />
+        {/* Value Pillars / Feature Cards */}
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full text-left">
+          {/* Card 1: Gemini Memory Firewall */}
+          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/60 flex items-center justify-center mb-4">
+                <Shield className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-stone-900 text-base">Gemini Memory Firewall</h3>
+              <p className="mt-2 text-sm text-stone-600 leading-relaxed">
+                A user-governed authorization layer between personal insights and Gemini. Memory suggestions require explicit user assignment of ALLOWED, TEMPORARY, BLOCKED, or REVOKED policies before inclusion.
+              </p>
             </div>
-            <h3 className="font-semibold text-stone-900 text-base">Gemini Memory Firewall</h3>
-            <p className="mt-2 text-sm text-stone-600 leading-relaxed">
-              Strict pre-LLM authorization. Gemini detects potential memories, but zero memories enter context without your explicit ALLOW, TEMPORARY, or BLOCK approval.
-            </p>
           </div>
 
-          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 border border-blue-200/60 flex items-center justify-center mb-4">
-              <Sparkles className="w-5 h-5" />
+          {/* Card 2: Gemini AI Reflections */}
+          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-800 border border-blue-200/60 flex items-center justify-center mb-4">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-stone-900 text-base">Gemini AI Reflections</h3>
+              <p className="mt-2 text-sm text-stone-600 leading-relaxed">
+                Multi-turn conversational reflections powered by Gemini with automated model fallback resilience. Synthesize takeaways, explore cognitive patterns, and brainstorm next steps.
+              </p>
             </div>
-            <h3 className="font-semibold text-stone-900 text-base">Gemini 3.6 Flash Reflexes</h3>
-            <p className="mt-2 text-sm text-stone-600 leading-relaxed">
-              Multi-turn conversational reflections with automated fallback resilience. Brainstorm actions, synthesize core takeaways, or explore deep emotional inquiry.
-            </p>
           </div>
 
-          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/60 flex items-center justify-center mb-4">
-              <BookOpen className="w-5 h-5" />
+          {/* Card 3: Owner-Bound Firestore Isolation */}
+          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/60 flex items-center justify-center mb-4">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-stone-900 text-base">Owner-Bound Firestore Isolation</h3>
+              <p className="mt-2 text-sm text-stone-600 leading-relaxed">
+                Enforced by verified owner-bound Firestore Security Rules (<code className="text-xs bg-stone-100 px-1 py-0.5 rounded font-mono">request.auth.uid == userId</code>). Your journal entries and memories are accessible only by your authenticated account.
+              </p>
             </div>
-            <h3 className="font-semibold text-stone-900 text-base">Owner-Bound Firestore Isolation</h3>
-            <p className="mt-2 text-sm text-stone-600 leading-relaxed">
-              Enforced by verified owner-bound Firestore security rules. Your reflections are cryptographically mapped to your authenticated UID and never leaked.
-            </p>
+          </div>
+
+          {/* Card 4: Google Sign-In */}
+          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-800 border border-stone-200 flex items-center justify-center mb-4">
+                <Lock className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-stone-900 text-base">Google Sign-In</h3>
+              <p className="mt-2 text-sm text-stone-600 leading-relaxed">
+                Secure federated authentication via Firebase Auth and Google Identity. Outsources credential handling safely with zero application password storage.
+              </p>
+            </div>
+          </div>
+
+          {/* Card 5: Pre-LLM Memory Filtering */}
+          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-800 border border-rose-200/60 flex items-center justify-center mb-4">
+                <Shield className="w-5 h-5 text-rose-700" />
+              </div>
+              <h3 className="font-semibold text-stone-900 text-base">Pre-LLM Memory Filtering</h3>
+              <p className="mt-2 text-sm text-stone-600 leading-relaxed">
+                BLOCKED, REVOKED, and expired TEMPORARY memories are excluded before the Gemini request. Candidate memories must pass explicit policy evaluation prior to prompt construction.
+              </p>
+            </div>
+          </div>
+
+          {/* Card 6: Server-Side Gemini API Proxy */}
+          <div className="p-6 rounded-2xl bg-white border border-stone-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200/60 flex items-center justify-center mb-4">
+                <Sparkles className="w-5 h-5 text-indigo-700" />
+              </div>
+              <h3 className="font-semibold text-stone-900 text-base">Server-Side Gemini API Proxy</h3>
+              <p className="mt-2 text-sm text-stone-600 leading-relaxed">
+                Gemini API calls are dispatched exclusively through Express server routes. API keys remain secret on the server with defense-in-depth output redaction and automated model fallback.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -152,7 +200,7 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
         <div className="mt-14 flex flex-wrap items-center justify-center gap-6 text-xs text-stone-600">
           <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            OAuth 2.0 Federated Identity
+            Federated Google Sign-In
           </span>
           <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -161,6 +209,10 @@ export const LandingPage: React.FC<LandingPageProps> = () => {
           <span className="flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             Server-Side Gemini API Proxy
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            Owner-Bound Firestore Rules
           </span>
         </div>
       </main>

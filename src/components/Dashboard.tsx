@@ -73,8 +73,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       userId: user.uid,
       title: "",
       content: "",
-      mood: "Reflective",
+      mood: "Calm",
       tags: [],
+      isFavorite: false,
       createdAt: timestamp,
       updatedAt: timestamp,
       messages: [],
@@ -98,6 +99,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             // do NOT overwrite activeEntryId or activeEntry with fetched[0].
           } else {
             // No active entry was selected yet, default to the first entry
+            activeEntryIdRef.current = fetched[0].id;
             setActiveEntryId(fetched[0].id);
             setActiveEntry(fetched[0]);
           }
@@ -105,6 +107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           // No entries in Firestore at all
           if (!currentActiveId) {
             const fresh = createNewBlankEntry();
+            activeEntryIdRef.current = fresh.id;
             setActiveEntry(fresh);
             setActiveEntryId(fresh.id);
           }
@@ -187,14 +190,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     setIsGenerating(false);
 
     try {
-      await deleteJournalEntry(user.uid, entryId);
+      const deleteResult = await deleteJournalEntry(user.uid, entryId);
+      if (deleteResult?.memoryError) {
+        console.warn(
+          `[Dashboard] Entry "${entryId}" deleted from Firestore, but memory cleanup encountered an issue:`,
+          deleteResult.memoryError
+        );
+      }
       if (activeEntryId === entryId) {
         const remaining = entries.filter((e) => e.id !== entryId);
         if (remaining.length > 0) {
+          activeEntryIdRef.current = remaining[0].id;
           setActiveEntryId(remaining[0].id);
           setActiveEntry(remaining[0]);
         } else {
           const fresh = createNewBlankEntry();
+          activeEntryIdRef.current = fresh.id;
           setActiveEntry(fresh);
           setActiveEntryId(fresh.id);
         }
@@ -220,6 +231,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       updatedAt: Date.now(),
     };
     setActiveEntry(merged);
+    setEntries((prev) => {
+      const exists = prev.some((e) => e.id === entryId);
+      if (exists) {
+        return prev.map((e) => (e.id === entryId ? merged : e));
+      }
+      return [merged, ...prev];
+    });
 
     // Save to Firestore
     try {
@@ -242,6 +260,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const handleRetrySave = () => {
     if (activeEntry) {
       handleUpdateEntry(activeEntry.id, activeEntry);
+    }
+  };
+
+  // Toggle favorite status on an entry from sidebar or editor
+  const handleToggleFavoriteEntry = async (entryId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const target = entries.find((en) => en.id === entryId);
+    if (!target) return;
+    const nextVal = !target.isFavorite;
+
+    // Optimistically update list
+    setEntries((prev) =>
+      prev.map((item) =>
+        item.id === entryId ? { ...item, isFavorite: nextVal, updatedAt: Date.now() } : item
+      )
+    );
+
+    // If target is currently active, sync active entry state
+    if (activeEntry && activeEntry.id === entryId) {
+      setActiveEntry((prev) => (prev ? { ...prev, isFavorite: nextVal, updatedAt: Date.now() } : prev));
+    }
+
+    try {
+      await saveJournalEntry(user.uid, { id: entryId, isFavorite: nextVal, updatedAt: Date.now() });
+    } catch (err) {
+      console.error("Failed to update favorite status in Firestore:", err);
+      // Rollback on failure
+      setEntries((prev) =>
+        prev.map((item) => (item.id === entryId ? { ...item, isFavorite: !nextVal } : item))
+      );
+      if (activeEntry && activeEntry.id === entryId) {
+        setActiveEntry((prev) => (prev ? { ...prev, isFavorite: !nextVal } : prev));
+      }
     }
   };
 
@@ -384,6 +437,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         onSelectEntry={handleSelectEntry}
         onNewEntry={handleNewEntry}
         onDeleteEntry={handleDeleteEntry}
+        onToggleFavorite={handleToggleFavoriteEntry}
         isOpenMobile={isSidebarMobileOpen}
         onCloseMobile={() => setIsSidebarMobileOpen(false)}
       />
